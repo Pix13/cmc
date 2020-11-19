@@ -6,16 +6,18 @@ import json
 import random
 import socket
 import time
+import dateutil.parser as dp
+import sys, os
 
 # Connection
-server     = 'irc.server.com'
+server     = 'irc.freenode.net'
 port	   = 6667
 proxy      = None # Proxy should be a Socks5 in IP:PORT format.
 use_ipv6   = False
 use_ssl    = False
 ssl_verify = False
 vhost      = None
-channel    = '#coin'
+channel    = '#meh'
 key        = None
 
 # Certificate
@@ -37,6 +39,9 @@ operator_password = None
 throttle_cmd = 3
 throttle_msg = 0.5
 user_modes   = None
+
+#API Key
+CMC_API_KEY = '4ca10f7f-d474-462b-8bc7-d8caf6f29657'
 
 # Formatting Control Characters / Color Codes
 bold        = '\x02'
@@ -152,17 +157,17 @@ class CoinMarketCap(object):
 		if time.time() - self.cache['global']['last_updated'] < 300:
 			return self.cache['global']
 		else:
-			conn = http.client.HTTPSConnection('api.coinmarketcap.com', timeout=15)
-			conn.request('GET', '/v2/global/')
+			conn = http.client.HTTPSConnection('pro-api.coinmarketcap.com', timeout=15)
+			conn.request('GET', '/v1/global-metrics/quotes/latest?CMC_PRO_API_KEY=' + CMC_API_KEY)
 			data = json.loads(conn.getresponse().read())['data']
 			conn.close()
 			results = {
 				'cryptocurrencies' : data['active_cryptocurrencies'],
-				'markets'          : data['active_markets'],
-				'btc_dominance'    : int(data['bitcoin_percentage_of_market_cap']),
-				'market_cap'       : int(data['quotes']['USD']['total_market_cap']),
-				'volume'           : int(data['quotes']['USD']['total_volume_24h']),
-				'last_updated'     : int(data['last_updated'])
+				'markets'          : data['active_market_pairs'],
+				'btc_dominance'    : int(data['btc_dominance']),
+				'market_cap'       : int(data['quote']['USD']['total_market_cap']),
+				'volume'           : int(data['quote']['USD']['total_volume_24h']),
+				'last_updated'     : int(dp.parse(data['last_updated']).strftime('%s'))
 			}
 			self.cache['global'] = results
 			return results
@@ -173,8 +178,8 @@ class CoinMarketCap(object):
 		else:
 			self.cache['ticker'] = dict()
 			for i in range(1,int(self._global()['cryptocurrencies']/100)+2):
-				conn = http.client.HTTPSConnection('api.coinmarketcap.com', timeout=15)
-				conn.request('GET', '/v2/ticker/?start=' + str(((i*100)-100)+1))
+				conn = http.client.HTTPSConnection('pro-api.coinmarketcap.com', timeout=15)
+				conn.request('GET', '/v1/cryptocurrency/listings/latest?CMC_PRO_API_KEY=' + CMC_API_KEY + '&start=' + str(((i*100)-100)+1))
 				data = json.loads(conn.getresponse().read().replace(b': null', b': "0"'))['data']
 				conn.close()
 				for item in data:
@@ -183,12 +188,12 @@ class CoinMarketCap(object):
 					self.cache['ticker'][data[item]['symbol']] = {
 						'name'         : data[item]['name'],
 						'symbol'       : data[item]['symbol'],
-						'rank'         : data[item]['rank'],
-						'price'        : float(data[item]['quotes']['USD']['price']),
-						'volume'       : int(data[item]['quotes']['USD']['volume_24h']),
-						'market_cap'   : int(data[item]['quotes']['USD']['market_cap']),
+						'rank'         : data[item]['cmc_rank'],
+						'price'        : float(data[item]['quote']['USD']['price']),
+						'volume'       : int(data[item]['quote']['USD']['volume_24h']),
+						'market_cap'   : int(data[item]['quote']['USD']['market_cap']),
 						'percent'      : {'1h':float(data[item]['quotes']['USD']['percent_change_1h']),'24h':float(data[item]['quotes']['USD']['percent_change_24h']),'7d':float(data[item]['quotes']['USD']['percent_change_7d'])},
-						'last_updated' : int(data[item]['last_updated'])
+						'last_updated' : int(dp.parse(data['last_updated']).strftime('%s'))
 					}
 					data[item] = None
 			return self.cache['ticker']
@@ -335,7 +340,9 @@ class IRC(object):
 							self.error(chan, 'Invalid option!', 'Valid options are 1h, 24h, 7d, value, & volume')
 				self.last = time.time()
 		except Exception as ex:
-			self.error(chan, 'Unknown error occured!', ex)
+			exc_type, exc_obj, exc_tb = sys.exc_info()
+			fname = os.path.split(exc_tb.tb_frame.f_code.co_filename)[1]
+			print(exc_type, fname, exc_tb.tb_lineno)
 
 	def handle_events(self, data):
 		args = data.split()
