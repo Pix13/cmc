@@ -340,6 +340,7 @@ class IRC(object):
 							self.error(chan, 'Invalid option!', 'Valid options are 1h, 24h, 7d, value, & volume')
 				self.last = time.time()
 		except Exception as ex:
+			# self.error(chan, 'Unknown error occured!', ex)
 			exc_type, exc_obj, exc_tb = sys.exc_info()
 			fname = os.path.split(exc_tb.tb_frame.f_code.co_filename)[1]
 			print(exc_type, fname, exc_tb.tb_lineno)
